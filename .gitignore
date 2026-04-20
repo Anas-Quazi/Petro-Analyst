@@ -1,0 +1,57 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Windows
+*.exe
+*.dll
+*.msi
+
+# Logs
+*.log
+*.tmp
+*.temp
+
+# JSON config/cache
+*.json
+package-lock.json
+
+# Environment files
+.env
+.env.local
+*.env
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# MySQL
+*.sql.bak
+*.ibd
+*.frm
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Python (if used later)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Docker (if used later)
+*.log
+docker-compose.override.yml
+
+# Misc
+*.bak
+*.swp
+*.swo
+*.orig
