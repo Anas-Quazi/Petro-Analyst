@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>India Fuel Price Alert System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0e1a;
+    --panel:    #111827;
+    --border:   #1e2d45;
+    --accent:   #f97316;
+    --accent2:  #3b82f6;
+    --success:  #22c55e;
+    --warn:     #eab308;
+    --danger:   #ef4444;
+    --critical: #dc2626;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --mono:     'Space Mono', monospace;
+    --sans:     'Sora', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+  /* grid noise texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: radial-gradient(circle at 20% 50%, rgba(249,115,22,0.04) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 20%, rgba(59,130,246,0.04) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); }
+  .header-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 44px; height: 44px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .logo-text h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo-text p { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+  .badge { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-family: var(--mono); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+  /* ── FUEL SELECTOR ── */
+  .fuel-selector { display: flex; gap: 10px; margin: 28px 0 20px; flex-wrap: wrap; }
+  .fuel-btn { flex: 1; min-width: 120px; padding: 14px 20px; background: var(--panel); border: 2px solid var(--border); border-radius: 12px; cursor: pointer; font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--muted); transition: all .2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .fuel-btn .icon { font-size: 24px; }
+  .fuel-btn.active { border-color: var(--accent); color: var(--text); background: rgba(249,115,22,0.08); }
+  .fuel-btn:hover:not(.active) { border-color: var(--border); color: var(--text); background: rgba(255,255,255,0.04); }
+
+  /* ── INPUT GRID ── */
+  .input-section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px; }
+  .input-section h2 { font-size: 13px; font-family: var(--mono); color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px; }
+  .input-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .input-group { display: flex; flex-direction: column; gap: 6px; }
+  .input-group label { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .input-group .hint { font-size: 10px; color: var(--muted); opacity: 0.7; }
+  .input-group input, .input-group select {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; color: var(--text);
+    font-family: var(--mono); font-size: 14px; outline: none;
+    transition: border-color .2s; width: 100%;
+  }
+  .input-group input:focus, .input-group select:focus { border-color: var(--accent); }
+  .input-group select option { background: var(--panel); }
+
+  .predict-btn {
+    width: 100%; margin-top: 20px; padding: 16px;
+    background: var(--accent); border: none; border-radius: 12px;
+    color: white; font-family: var(--sans); font-size: 16px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.5px; transition: all .2s;
+    position: relative; overflow: hidden;
+  }
+  .predict-btn:hover { background: #ea6c0a; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(249,115,22,0.3); }
+  .predict-btn:active { transform: translateY(0); }
+  .predict-btn::after { content: '→'; margin-left: 8px; }
+
+  /* ── RESULTS ── */
+  #results { display: none; }
+  #results.visible { display: block; }
+
+  /* Alert Banner */
+  .alert-banner {
+    border-radius: 16px; padding: 24px 28px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    animation: slideIn .4s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:none} }
+  .alert-banner.low      { background: rgba(34,197,94,0.1);  border: 1px solid rgba(34,197,94,0.3); }
+  .alert-banner.medium   { background: rgba(234,179,8,0.1);  border: 1px solid rgba(234,179,8,0.3); }
+  .alert-banner.high     { background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); }
+  .alert-banner.critical { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); animation: slideIn .4s ease, glow 1.5s ease infinite; }
+  @keyframes glow { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} 50%{box-shadow:0 0 20px rgba(239,68,68,0.2)} }
+  .alert-icon { font-size: 40px; flex-shrink: 0; }
+  .alert-text h2 { font-size: 22px; font-weight: 800; }
+  .alert-text p  { font-size: 14px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+  .alert-risk { margin-left: auto; text-align: right; }
+  .risk-label { font-size: 12px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; }
+  .risk-value { font-size: 28px; font-weight: 800; font-family: var(--mono); }
+  .risk-value.low      { color: var(--success); }
+  .risk-value.medium   { color: var(--warn); }
+  .risk-value.high     { color: var(--accent); }
+  .risk-value.critical { color: var(--danger); }
+
+  /* Stat Cards */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; animation: slideIn .4s ease; }
+  .stat-card .label { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .value { font-size: 26px; font-weight: 700; margin: 6px 0 4px; font-family: var(--mono); }
+  .stat-card .change { font-size: 13px; font-family: var(--mono); }
+  .stat-card .change.up   { color: var(--danger); }
+  .stat-card .change.down { color: var(--success); }
+  .stat-card .change.flat { color: var(--muted); }
+
+  /* Charts */
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media(max-width:700px){ .charts-grid{grid-template-columns:1fr} }
+  .chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; animation: slideIn .5s ease; }
+  .chart-card h3 { font-size: 13px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+  .chart-wrap { position: relative; height: 200px; }
+
+  /* Similar Months */
+  .similar-section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 20px; animation: slideIn .6s ease; }
+  .similar-section h3 { font-size: 13px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+  .similar-table { width: 100%; border-collapse: collapse; }
+  .similar-table th { font-size: 11px; font-family: var(--mono); color: var(--muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .similar-table td { font-size: 13px; font-family: var(--mono); padding: 10px 12px; border-bottom: 1px solid rgba(30,45,69,0.5); }
+  .similar-table tr:last-child td { border-bottom: none; }
+  .similar-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .risk-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .risk-badge.low      { background: rgba(34,197,94,0.15);  color: #86efac; }
+  .risk-badge.medium   { background: rgba(234,179,8,0.15);  color: #fde047; }
+  .risk-badge.high     { background: rgba(249,115,22,0.15); color: #fdba74; }
+  .risk-badge.critical { background: rgba(239,68,68,0.15);  color: #fca5a5; }
+
+  /* Recommendation */
+  .rec-section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 32px; animation: slideIn .7s ease; }
+  .rec-section h3 { font-size: 13px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+  .rec-list { display: flex; flex-direction: column; gap: 10px; }
+  .rec-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: 8px; background: rgba(255,255,255,0.02); border-left: 3px solid; }
+  .rec-item.info   { border-color: var(--accent2); }
+  .rec-item.warn   { border-color: var(--warn); }
+  .rec-item.danger { border-color: var(--danger); }
+  .rec-item .rec-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+  .rec-item .rec-text { font-size: 14px; line-height: 1.5; }
+  .rec-item .rec-text strong { color: var(--text); }
+  .rec-item .rec-text span  { color: var(--muted); font-size: 13px; }
+
+  /* Month nav for forecast */
+  .month-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .month-tab { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-family: var(--mono); background: rgba(255,255,255,0.04); border: 1px solid var(--border); cursor: pointer; transition: all .2s; color: var(--muted); }
+  .month-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  footer { border-top: 1px solid var(--border); padding: 20px 0; text-align: center; font-size: 12px; font-family: var(--mono); color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- HEADER -->
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">⚡</div>
+        <div class="logo-text">
+          <h1>India Fuel Price Alert System</h1>
+          <p>MIDDLE EAST CONFLICT IMPACT MONITOR · DATA MINING PROJECT</p>
+        </div>
+      </div>
+      <div class="badge">⬤ LIVE ANALYSIS</div>
+    </div>
+  </header>
+
+  <!-- FUEL SELECTOR -->
+  <div class="fuel-selector">
+    <button class="fuel-btn active" onclick="selectFuel('lpg', this)">
+      <span class="icon">🔵</span>
+      <span>LPG</span>
+      <span style="font-size:11px;font-family:var(--mono);color:var(--muted)">14.2 kg cylinder</span>
+    </button>
+    <button class="fuel-btn" onclick="selectFuel('petrol', this)">
+      <span class="icon">⛽</span>
+      <span>Petrol</span>
+      <span style="font-size:11px;font-family:var(--mono);color:var(--muted)">per litre</span>
+    </button>
+    <button class="fuel-btn" onclick="selectFuel('diesel', this)">
+      <span class="icon">🛢️</span>
+      <span>Diesel</span>
+      <span style="font-size:11px;font-family:var(--mono);color:var(--muted)">per litre</span>
+    </button>
+  </div>
+
+  <!-- INPUTS -->
+  <div class="input-section">
+    <h2>// Current Market Conditions</h2>
+    <div class="input-grid">
+      <div class="input-group">
+        <label id="fuelLabel">LPG Current Price (₹)</label>
+        <input type="number" id="fuelPrice" placeholder="e.g. 921" step="0.01">
+        <span class="hint">Current retail price</span>
+      </div>
+      <div class="input-group">
+        <label>GPR Index</label>
+        <input type="number" id="gprInput" placeholder="e.g. 297" step="0.1">
+        <span class="hint">Geopolitical Risk Index</span>
+      </div>
+      <div class="input-group">
+        <label>Brent Crude (USD/bbl)</label>
+        <input type="number" id="brentInput" placeholder="e.g. 103" step="0.01">
+        <span class="hint">International benchmark</span>
+      </div>
+      <div class="input-group">
+        <label>WTI Crude (USD/bbl)</label>
+        <input type="number" id="wtiInput" placeholder="e.g. 91" step="0.01">
+        <span class="hint">US crude benchmark</span>
+      </div>
+      <div class="input-group">
+        <label>INR/USD Rate (₹)</label>
+        <input type="number" id="inrInput" placeholder="e.g. 87" step="0.01">
+        <span class="hint">Rupee exchange rate</span>
+      </div>
+      <div class="input-group">
+        <label>Petrol Price (₹/L)</label>
+        <input type="number" id="petrolInput" placeholder="e.g. 100" step="0.01">
+        <span class="hint">Current petrol price</span>
+      </div>
+      <div class="input-group">
+        <label>Diesel Price (₹/L)</label>
+        <input type="number" id="dieselInput" placeholder="e.g. 90" step="0.01">
+        <span class="hint">Current diesel price</span>
+      </div>
+      <div class="input-group">
+        <label>Forecast Months</label>
+        <select id="forecastMonths">
+          <option value="1">Next 1 Month</option>
+          <option value="3" selected>Next 3 Months</option>
+          <option value="6">Next 6 Months</option>
+        </select>
+        <span class="hint">Prediction horizon</span>
+      </div>
+    </div>
+    <button class="predict-btn" onclick="runPrediction()">PREDICT FUEL PRICE IMPACT</button>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <!-- Alert Banner -->
+    <div id="alertBanner" class="alert-banner"></div>
+
+    <!-- Stat Cards -->
+    <div class="stat-grid" id="statGrid"></div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>// Price Forecast (₹)</h3>
+        <div class="month-tabs" id="monthTabs"></div>
+        <div class="chart-wrap"><canvas id="forecastChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>// GPR vs Fuel Price — Historical</h3>
+        <div class="chart-wrap"><canvas id="historyChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>// Risk Level Gauge</h3>
+        <div class="chart-wrap"><canvas id="gaugeChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>// Brent + INR Impact Score</h3>
+        <div class="chart-wrap"><canvas id="impactChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Similar Months -->
+    <div class="similar-section">
+      <h3>// Most Similar Historical Months (KNN Analysis)</h3>
+      <table class="similar-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>GPR</th>
+            <th>Brent</th>
+            <th>LPG Price</th>
+            <th>Petrol</th>
+            <th>Diesel</th>
+            <th>Risk</th>
+            <th>What Happened Next</th>
+          </tr>
+        </thead>
+        <tbody id="similarTable"></tbody>
+      </table>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="rec-section">
+      <h3>// System Recommendations</h3>
+      <div class="rec-list" id="recList"></div>
+    </div>
+  </div>
+
+  <footer>INDIA FUEL PRICE ALERT SYSTEM · DATA MINING PROJECT · BUILT WITH DECISION TREE + KNN + K-MEANS</footer>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const SCALE = {
+  brent:  { min: 27.0,  max: 133.18 },
+  wti:    { min: 16.0,  max: 130.50 },
+  inr:    { min: 44.0,  max: 87.0   },
+  gpr:    { min: 47.0,  max: 324.0  },
+  lpg:    { min: 345.0, max: 1053.0 },
+  petrol: { min: 47.0,  max: 110.0  },
+  diesel: { min: 35.0,  max: 98.0   },
+};
+
+const HISTORY = [
+  { date:"2024/04",brent:97.97,wti:96.15,inr:78.65,gpr:159.2,lpg:699.25,petrol:104.36,diesel:92.49,risk:2 },
+  { date:"2024/06",brent:90.34,wti:89.65,inr:78.7, gpr:105.1,lpg:699.25,petrol:104.36,diesel:92.49,risk:1 },
+  { date:"2024/08",brent:88.46,wti:86.05,inr:79.09,gpr:134.8,lpg:699.25,petrol:104.36,diesel:92.49,risk:1 },
+  { date:"2024/10",brent:83.77,wti:80.58,inr:79.18,gpr:123.8,lpg:699.25,petrol:104.36,diesel:92.49,risk:1 },
+  { date:"2024/12",brent:82.02,wti:78.40,inr:80.04,gpr:136.3,lpg:699.25,petrol:104.36,diesel:92.49,risk:1 },
+  { date:"2025/01",brent:87.38,wti:84.95,inr:81.2, gpr:105.3,lpg:699.25,petrol:110.0, diesel:98.0, risk:1 },
+  { date:"2025/03",brent:80.90,wti:76.21,inr:81.42,gpr:169.8,lpg:699.25,petrol:110.0, diesel:98.0, risk:2 },
+  { date:"2025/05",brent:72.69,wti:69.14,inr:80.29,gpr:161.0,lpg:740.12,petrol:110.0, diesel:98.0, risk:2 },
+  { date:"2025/06",brent:79.62,wti:76.13,inr:80.85,gpr:221.3,lpg:740.12,petrol:110.0, diesel:98.0, risk:3 },
+  { date:"2025/08",brent:76.08,wti:72.28,inr:82.35,gpr:132.2,lpg:740.12,petrol:110.0, diesel:98.0, risk:1 },
+  { date:"2025/10",brent:72.78,wti:67.65,inr:83.06,gpr:149.2,lpg:740.12,petrol:110.0, diesel:98.0, risk:2 },
+  { date:"2025/12",brent:70.79,wti:64.25,inr:84.54,gpr:124.6,lpg:740.12,petrol:110.0, diesel:98.0, risk:1 },
+  { date:"2026/01",brent:74.82,wti:66.66,inr:85.3, gpr:163.3,lpg:740.12,petrol:106.61,diesel:94.69,risk:2 },
+  { date:"2026/02",brent:79.07,wti:71.87,inr:85.17,gpr:114.2,lpg:740.12,petrol:106.61,diesel:94.69,risk:1 },
+  { date:"2026/03",brent:111.05,wti:103.17,inr:87.0,gpr:300.95,lpg:789.18,petrol:100.11,diesel:90.92,risk:3 },
+];
+
+// Full KNN reference dataset for similar month matching
+const KNN_DB = [
+  { date:"Mar 2011",gpr:137,brent:111,inr:45.5,lpg:412,petrol:65.64,diesel:44.65,risk:1,event:"Arab Spring peak",outcome:"LPG hiked ₹50 in 2 months" },
+  { date:"Jan 2012",gpr:148,brent:112,inr:51.2,lpg:399,petrol:68.65,diesel:47.15,risk:1,event:"Iran sanctions",outcome:"LPG hiked ₹45 — supply fear" },
+  { date:"Jun 2014",gpr:165,brent:115,inr:59.8,lpg:895,petrol:78.22,diesel:65.15,risk:2,event:"ISIS oil field seizure",outcome:"Brent fell — oversupply" },
+  { date:"May 2018",gpr:153,brent:78,inr:67.4,lpg:856,petrol:76.24,diesel:67.08,risk:1,event:"US exits JCPOA",outcome:"Crude rose 8%, INR weakened" },
+  { date:"Jan 2020",gpr:284,brent:63,inr:71.4,lpg:717,petrol:75.21,diesel:67.44,risk:3,event:"Soleimani assassination",outcome:"Brief spike, then Covid crash" },
+  { date:"Feb 2022",gpr:318,brent:95,inr:75.6,lpg:949,petrol:95.41,diesel:86.67,risk:3,event:"Russia-Ukraine war starts",outcome:"Brent hit $139, LPG ₹1053" },
+  { date:"Mar 2022",gpr:318,brent:117,inr:76.6,lpg:999,petrol:95.41,diesel:86.67,risk:3,event:"Russia-Ukraine peak",outcome:"Highest crude since 2013" },
+  { date:"Oct 2023",gpr:198,brent:92,inr:83.2,lpg:899,petrol:106.31,diesel:92.76,risk:2,event:"Israel-Gaza war starts",outcome:"LPG stayed at ₹903 (subsidy)" },
+  { date:"Apr 2024",gpr:159,brent:90,inr:83.5,lpg:803,petrol:104.36,diesel:92.49,risk:2,event:"Iran-Israel strikes",outcome:"Prices stable, govt frozen" },
+  { date:"Jun 2025",gpr:221,brent:80,inr:80.9,lpg:803,petrol:110.0,diesel:98.0,risk:3,event:"Red Sea escalation",outcome:"LPG hiked ₹50 in Sep 2025" },
+  { date:"Mar 2026",gpr:301,brent:111,inr:87.0,lpg:921,petrol:100.11,diesel:90.92,risk:3,event:"Iran-USA conflict",outcome:"Ongoing — highest GPR in 4 yrs" },
+];
+
+let selectedFuel = 'lpg';
+let charts = {};
+
+function selectFuel(fuel, btn) {
+  selectedFuel = fuel;
+  document.querySelectorAll('.fuel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const labels = { lpg: 'LPG Current Price (₹)', petrol: 'Petrol Current Price (₹/L)', diesel: 'Diesel Current Price (₹/L)' };
+  document.getElementById('fuelLabel').textContent = labels[fuel];
+}
+
+function scale(val, key) {
+  const s = SCALE[key];
+  return Math.max(0, Math.min(1, (val - s.min) / (s.max - s.min)));
+}
+function unscale(val, key) {
+  const s = SCALE[key];
+  return val * (s.max - s.min) + s.min;
+}
+
+// ── DECISION TREE LOGIC (reproduced from trained model) ───────────────────────
+function classifyRisk(gpr) {
+  if (gpr < 100) return 0;
+  if (gpr < 150) return 1;
+  if (gpr < 200) return 2;
+  return 3;
+}
+
+const RISK_NAMES  = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const RISK_COLORS = ['#22c55e', '#eab308', '#f97316', '#ef4444'];
+const RISK_ICONS  = ['✅', '⚠️', '🔶', '🚨'];
+const RISK_CSS    = ['low', 'medium', 'high', 'critical'];
+
+// ── PRICE FORECAST MODEL ──────────────────────────────────────────────────────
+function forecastPrice(currentPrice, gpr, brent, inr, months, fuel) {
+  // Based on historical pattern analysis:
+  // - GPR > 200: expect 3-8% price increase per month with lag
+  // - Brent change above baseline: ~0.3x multiplier on fuel price
+  // - INR depreciation: amplifies import cost
+  const gprScaled   = scale(gpr, 'gpr');
+  const brentScaled = scale(brent, 'brent');
+  const inrScaled   = scale(inr, 'inr');
+
+  // Conflict intensity combined score
+  const baseGPR    = 0.35; // medium baseline
+  const baseBrent  = 0.45;
+  const gprPressure  = Math.max(0, gprScaled - baseGPR) * 1.8;
+  const brentPressure = Math.max(0, brentScaled - baseBrent) * 1.2;
+  const inrPressure  = inrScaled * 0.4;
+  const totalPressure = gprPressure + brentPressure + inrPressure;
+
+  // Monthly adjustment factors based on risk
+  const risk = classifyRisk(gpr);
+  const monthlyFactors = [0.001, 0.008, 0.022, 0.048]; // low/med/high/critical
+  const baseFactor = monthlyFactors[risk];
+  const randomVariance = () => (Math.random() - 0.5) * 0.008;
+
+  const forecasts = [];
+  let price = currentPrice;
+  const fuelKey = fuel === 'lpg' ? 'lpg' : fuel === 'petrol' ? 'petrol' : 'diesel';
+  const scaleRange = SCALE[fuelKey].max - SCALE[fuelKey].min;
+
+  for (let m = 1; m <= months; m++) {
+    // Government typically adjusts with 1-2 month lag
+    const lag = m >= 2 ? 1.0 : 0.4;
+    const monthFactor = (baseFactor + totalPressure * 0.015 + randomVariance()) * lag;
+    const changeAmt = price * monthFactor;
+    price = Math.round((price + changeAmt) * 100) / 100;
+    forecasts.push({ month: m, price, change: changeAmt, pct: (monthFactor * 100) });
+  }
+  return forecasts;
+}
+
+// ── KNN SIMILAR MONTHS ────────────────────────────────────────────────────────
+function findSimilarMonths(gpr, brent, inr, lpg, n = 5) {
+  const distances = KNN_DB.map(row => {
+    const d = Math.sqrt(
+      Math.pow(scale(gpr,'gpr')   - scale(row.gpr,  'gpr'),   2) +
+      Math.pow(scale(brent,'brent') - scale(row.brent,'brent'), 2) +
+      Math.pow(scale(inr,'inr')   - scale(row.inr,  'inr'),   2) +
+      Math.pow(scale(lpg,'lpg')   - scale(row.lpg,  'lpg'),   2) * 0.5
+    );
+    return { ...row, dist: d };
+  });
+  return distances.sort((a,b) => a.dist - b.dist).slice(0, n);
+}
+
+// ── MAIN PREDICTION ───────────────────────────────────────────────────────────
+let forecastData = [];
+let forecastChartInst = null, histChartInst = null, gaugeChartInst = null, impactChartInst = null;
+
+function runPrediction() {
+  const fuelPrice = parseFloat(document.getElementById('fuelPrice').value);
+  const gpr       = parseFloat(document.getElementById('gprInput').value);
+  const brent     = parseFloat(document.getElementById('brentInput').value);
+  const wti       = parseFloat(document.getElementById('wtiInput').value);
+  const inr       = parseFloat(document.getElementById('inrInput').value);
+  const petrol    = parseFloat(document.getElementById('petrolInput').value);
+  const diesel    = parseFloat(document.getElementById('dieselInput').value);
+  const months    = parseInt(document.getElementById('forecastMonths').value);
+
+  if ([fuelPrice,gpr,brent,wti,inr,petrol,diesel].some(isNaN)) {
+    alert('Please fill in all fields before predicting.'); return;
+  }
+
+  const risk = classifyRisk(gpr);
+  forecastData = forecastPrice(fuelPrice, gpr, brent, inr, months, selectedFuel);
+
+  // Show results
+  const results = document.getElementById('results');
+  results.classList.add('visible');
+  results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Alert Banner
+  const banner = document.getElementById('alertBanner');
+  const lastForecast = forecastData[forecastData.length - 1];
+  const totalPct = ((lastForecast.price - fuelPrice) / fuelPrice * 100).toFixed(1);
+  const fuelNames = { lpg: 'LPG Cylinder', petrol: 'Petrol', diesel: 'Diesel' };
+  banner.className = `alert-banner ${RISK_CSS[risk]}`;
+  banner.innerHTML = `
+    <div class="alert-icon">${RISK_ICONS[risk]}</div>
+    <div class="alert-text">
+      <h2>${RISK_NAMES[risk]} RISK — ${fuelNames[selectedFuel]} Analysis</h2>
+      <p>GPR=${gpr} · Brent=$${brent} · INR/USD=₹${inr} · Forecast=${months} month${months>1?'s':''}</p>
+    </div>
+    <div class="alert-risk">
+      <div class="risk-label">Risk Level</div>
+      <div class="risk-value ${RISK_CSS[risk]}">${RISK_NAMES[risk]}</div>
+    </div>`;
+
+  // Stat Cards
+  const crudeInrImpact = (brent * inr).toFixed(0);
+  const conflictIntensity = ((gpr - 100) / 100 + (brent - 70) / 60).toFixed(2);
+  const fuelUnit = selectedFuel === 'lpg' ? '₹/cyl' : '₹/L';
+  document.getElementById('statGrid').innerHTML = `
+    <div class="stat-card">
+      <div class="label">Current ${selectedFuel.toUpperCase()} Price</div>
+      <div class="value" style="color:var(--text)">₹${fuelPrice}</div>
+      <div class="change flat">${fuelUnit}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Predicted (Month ${months})</div>
+      <div class="value" style="color:${RISK_COLORS[risk]}">₹${lastForecast.price.toFixed(0)}</div>
+      <div class="change ${totalPct > 0 ? 'up' : totalPct < 0 ? 'down' : 'flat'}">${totalPct > 0 ? '▲' : totalPct < 0 ? '▼' : '—'} ${Math.abs(totalPct)}% change</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Crude × INR Impact</div>
+      <div class="value" style="color:var(--accent2)">₹${crudeInrImpact}</div>
+      <div class="change flat">cost per barrel in ₹</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Conflict Intensity</div>
+      <div class="value" style="color:${risk>=2?'var(--danger)':'var(--warn)'}">${conflictIntensity}</div>
+      <div class="change flat">GPR + Crude combined</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">GPR Index</div>
+      <div class="value" style="color:${RISK_COLORS[risk]}">${gpr}</div>
+      <div class="change flat">${gpr<100?'below threshold':gpr<150?'medium zone':gpr<200?'high zone':'critical zone'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Brent / WTI</div>
+      <div class="value" style="color:var(--accent2)">$${brent}</div>
+      <div class="change flat">WTI $${wti} · spread $${(brent-wti).toFixed(1)}</div>
+    </div>`;
+
+  // Month tabs
+  const tabHtml = forecastData.map((f,i) =>
+    `<div class="month-tab ${i===forecastData.length-1?'active':''}" onclick="highlightMonth(${i}, this)">
+      Month +${f.month}
+    </div>`).join('');
+  document.getElementById('monthTabs').innerHTML = tabHtml;
+
+  // Forecast Chart
+  if (forecastChartInst) forecastChartInst.destroy();
+  const fLabels = ['Current', ...forecastData.map(f => `+${f.month}m`)];
+  const fData   = [fuelPrice, ...forecastData.map(f => f.price)];
+  const fColors = fData.map((v,i) => i===0 ? '#64748b' : (v > fuelPrice*1.05 ? '#ef4444' : v > fuelPrice ? '#f97316' : '#22c55e'));
+  forecastChartInst = new Chart(document.getElementById('forecastChart'), {
+    type: 'bar',
+    data: {
+      labels: fLabels,
+      datasets: [{
+        label: `${selectedFuel.toUpperCase()} Price (₹)`,
+        data: fData,
+        backgroundColor: fColors,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { family: 'Space Mono', size: 11 } } },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: '#94a3b8', font: { family: 'Space Mono', size: 11 }, callback: v => '₹'+v.toFixed(0) },
+          suggestedMin: fuelPrice * 0.95
+        }
+      }
+    }
+  });
+
+  // History Chart
+  if (histChartInst) histChartInst.destroy();
+  const hLabels = HISTORY.map(h => h.date.slice(0,7));
+  const hGPR    = HISTORY.map(h => h.gpr);
+  const hFuel   = HISTORY.map(h => selectedFuel==='lpg'?h.lpg:selectedFuel==='petrol'?h.petrol:h.diesel);
+  histChartInst = new Chart(document.getElementById('historyChart'), {
+    type: 'line',
+    data: {
+      labels: hLabels,
+      datasets: [
+        {
+          label: 'GPR Index', data: hGPR, yAxisID: 'y2',
+          borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.1)',
+          borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true
+        },
+        {
+          label: `${selectedFuel.toUpperCase()} Price`, data: hFuel, yAxisID: 'y1',
+          borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.05)',
+          borderWidth: 2.5, pointRadius: 3, tension: 0.3
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Space Mono', size: 10 }, boxWidth: 12 } } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { family: 'Space Mono', size: 9 }, maxRotation: 45, maxTicksLimit: 8 } },
+        y1: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#f97316', font: { family: 'Space Mono', size: 10 }, callback: v => '₹'+v.toFixed(0) }, position: 'left' },
+        y2: { grid: { display: false }, ticks: { color: '#8b5cf6', font: { family: 'Space Mono', size: 10 } }, position: 'right' }
+      }
+    }
+  });
+
+  // Gauge Chart (doughnut)
+  if (gaugeChartInst) gaugeChartInst.destroy();
+  const gprPct = Math.min(100, (gpr / 324) * 100);
+  gaugeChartInst = new Chart(document.getElementById('gaugeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['LOW (<100)', 'MEDIUM (100-150)', 'HIGH (150-200)', 'CRITICAL (>200)', ''],
+      datasets: [{
+        data: [
+          Math.min(gpr, 100),
+          Math.max(0, Math.min(gpr - 100, 50)),
+          Math.max(0, Math.min(gpr - 150, 50)),
+          Math.max(0, Math.min(gpr - 200, 124)),
+          Math.max(0, 324 - gpr)
+        ],
+        backgroundColor: ['#22c55e','#eab308','#f97316','#ef4444','rgba(255,255,255,0.04)'],
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '70%',
+      rotation: -90, circumference: 180,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: '#94a3b8', font: { family: 'Space Mono', size: 9 }, boxWidth: 10, padding: 8 } },
+        tooltip: { callbacks: { label: (c) => c.label !== '' ? ` ${c.label}: ${c.raw.toFixed(0)}` : '' } }
+      }
+    },
+    plugins: [{
+      id: 'centerText',
+      afterDraw(chart) {
+        const { ctx, chartArea: { top, width, height } } = chart;
+        ctx.save();
+        ctx.font = `700 28px 'Space Mono'`;
+        ctx.fillStyle = RISK_COLORS[risk];
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(gpr.toFixed(0), chart.chartArea.left + width/2, top + height * 0.75);
+        ctx.font = `400 11px 'Space Mono'`;
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('GPR INDEX', chart.chartArea.left + width/2, top + height * 0.88);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // Impact Score Chart
+  if (impactChartInst) impactChartInst.destroy();
+  const impactData = HISTORY.map(h => ({ x: h.gpr, y: h.brent * h.inr, r: 5 }));
+  impactData.push({ x: gpr, y: brent * inr, r: 12 }); // current point
+  const impactColors = HISTORY.map(h => RISK_COLORS[h.risk]).concat([RISK_COLORS[risk]]);
+  impactChartInst = new Chart(document.getElementById('impactChart'), {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        label: 'Historical months',
+        data: impactData.slice(0, -1),
+        backgroundColor: HISTORY.map(h => RISK_COLORS[h.risk] + '99'),
+        borderWidth: 0,
+      }, {
+        label: 'Current',
+        data: [impactData[impactData.length-1]],
+        backgroundColor: RISK_COLORS[risk],
+        borderColor: '#ffffff',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Space Mono', size: 10 }, boxWidth: 10 } } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'GPR Index', color: '#64748b', font: { family: 'Space Mono', size: 10 } }, ticks: { color: '#94a3b8', font: { family: 'Space Mono', size: 9 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Crude × INR Impact', color: '#64748b', font: { family: 'Space Mono', size: 10 } }, ticks: { color: '#94a3b8', font: { family: 'Space Mono', size: 9 } } }
+      }
+    }
+  });
+
+  // Similar Months
+  const lpgForKNN = selectedFuel==='lpg' ? fuelPrice : selectedFuel==='petrol' ? petrol : diesel;
+  const similar = findSimilarMonths(gpr, brent, inr, lpgForKNN);
+  const riskBadge = (r) => `<span class="risk-badge ${RISK_CSS[r]}">${RISK_NAMES[r]}</span>`;
+  document.getElementById('similarTable').innerHTML = similar.map(s => `
+    <tr>
+      <td style="color:var(--text);font-weight:600">${s.date}</td>
+      <td style="color:${RISK_COLORS[s.risk]}">${s.gpr}</td>
+      <td>$${s.brent}</td>
+      <td>₹${s.lpg}</td>
+      <td>₹${s.petrol}</td>
+      <td>₹${s.diesel}</td>
+      <td>${riskBadge(s.risk)}</td>
+      <td style="color:var(--muted);font-size:12px">${s.outcome}</td>
+    </tr>`).join('');
+
+  // Recommendations
+  const recs = [];
+  if (risk === 3) {
+    recs.push({ type:'danger', icon:'🚨', title:'CRITICAL ALERT — Immediate Action Required', body:`GPR index of ${gpr} indicates severe geopolitical tension. Historical pattern shows LPG prices rose <strong>₹100-200</strong> within 2-3 months during similar past events (Russia-Ukraine: +₹200, Soleimani: +₹80).` });
+    recs.push({ type:'danger', icon:'⛽', title:'Fuel Price Hike Likely in 1-2 Months', body:`Brent crude at <strong>$${brent}/bbl</strong> combined with INR at ₹${inr}/USD creates import cost pressure. Government typically passes ₹${Math.round(brent*inr*0.002)}-₹${Math.round(brent*inr*0.004)} per unit to consumers.` });
+    recs.push({ type:'warn', icon:'📊', title:'Monitor PPAC Announcements Weekly', body:`Check <strong>ppac.gov.in</strong> for price revision notifications. Most hikes are announced on the 1st of the month.` });
+  } else if (risk === 2) {
+    recs.push({ type:'warn', icon:'⚠️', title:'HIGH RISK — Price Hike Possible in 1-3 Months', body:`GPR at ${gpr} is in the HIGH zone (150-200). Conflict escalation could push it into Critical territory. Similar period (Oct 2023: Gaza, GPR=198) resulted in moderate price pressure.` });
+    recs.push({ type:'info', icon:'📈', title:'Brent Trending', body:`Crude at $${brent}/bbl is ${brent > 90 ? '<strong>above</strong> the comfortable threshold ($90). Price pass-through risk is elevated.' : '<strong>moderate</strong>. Unless GPR spikes further, immediate large hike is less likely.'}` });
+  } else if (risk === 1) {
+    recs.push({ type:'info', icon:'✅', title:'MEDIUM RISK — Monitor Closely', body:`GPR at ${gpr} is in the medium range. No immediate large price shock expected but situation should be monitored weekly.` });
+    recs.push({ type:'info', icon:'💡', title:'Price Stability Expected Short-term', body:`Based on similar past months (KNN analysis), prices in this GPR range typically remain stable or see minor adjustments of ₹5-15.` });
+  } else {
+    recs.push({ type:'info', icon:'✅', title:'LOW RISK — Stable Period', body:`GPR at ${gpr} indicates low geopolitical tension. Fuel prices are likely to remain stable. This is the most common state (54% of months in our dataset).` });
+  }
+  recs.push({ type:'info', icon:'🔍', title:`Most Similar Historical Month: ${similar[0].date}`, body:`GPR=${similar[0].gpr}, Brent=$${similar[0].brent}, LPG=₹${similar[0].lpg} — <strong>${similar[0].event}</strong>. Outcome: ${similar[0].outcome}` });
+
+  document.getElementById('recList').innerHTML = recs.map(r => `
+    <div class="rec-item ${r.type}">
+      <div class="rec-icon">${r.icon}</div>
+      <div class="rec-text"><strong>${r.title}</strong><br><span>${r.body}</span></div>
+    </div>`).join('');
+}
+
+function highlightMonth(idx, btn) {
+  document.querySelectorAll('.month-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// Auto-fill with Mar 2026 Iran-USA values as demo
+window.onload = () => {
+  document.getElementById('fuelPrice').value   = 921;
+  document.getElementById('gprInput').value    = 297;
+  document.getElementById('brentInput').value  = 103;
+  document.getElementById('wtiInput').value    = 91;
+  document.getElementById('inrInput').value    = 87;
+  document.getElementById('petrolInput').value = 100;
+  document.getElementById('dieselInput').value = 91;
+};
+</script>
+</body>
+</html>
